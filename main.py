@@ -18,7 +18,7 @@ except ImportError:
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 SENDER_EMAIL = os.environ.get('EMAIL_USER')
 SENDER_PASSWORD = os.environ.get('EMAIL_PASS')
-RECEIVER_EMAIL = SENDER_EMAIL # 나에게 보내기
+RECEIVER_EMAIL = "news-bot@june8th.net"
 
 # 1. Gemini 설정
 genai.configure(api_key=GEMINI_API_KEY)
