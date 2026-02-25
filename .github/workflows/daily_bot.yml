@@ -1,4 +1,4 @@
-name: Daily Theqoo Bot
+name: Daily TheQoo Bot
 
 on:
   schedule:
