@@ -6,9 +6,13 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # GitHub Actions 환경 등 라이브러리가 없는 경우 그냥 넘어감
+    pass
 
 # 금고(Secrets)에서 값 가져오기
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
