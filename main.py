@@ -72,7 +72,7 @@ def ai_filter_with_gemini(articles, interests):
         # 에러 발생 시 빈 리스트를 반환하여 프로그램이 멈추지 않게 합니다.
         return []
     
-def send_email(articles_json):
+def send_email(articles_json, receiver_email):
     if not articles_json:
         print("발송할 내용이 없습니다.")
         return
@@ -111,7 +111,7 @@ def send_email(articles_json):
     msg = MIMEMultipart()
     msg['Subject'] = "[오늘의 스퀘어] AI가 요약한 인기 글 도착! 📬"
     msg['From'] = SENDER_EMAIL
-    msg['To'] = SENDER_EMAIL # 나에게 보내기
+    msg['To'] = receiver_email
 
     # 중요: MIMEText의 두 번째 인자를 'html'로 설정
     msg.attach(MIMEText(html_content, 'html'))
@@ -129,11 +129,25 @@ if __name__ == "__main__":
     # 1. 100개 수집
     raw_data = fetch_theqoo_100()
     
-    # 2. 내 관심사 (마음껏 수정해 보세요!)
-    my_interests = "IT 기기, NCT, 미국, AI" 
+    # 2. Read users_config.json
+    with open('users_config.json', 'r', encoding='utf-8') as f:
+        users = json.load(f)
     
-    # 3. AI 필터링
-    recommended_articles = ai_filter_with_gemini(raw_data, my_interests)
-    
-    # 4. 메일 발송
-    send_email(recommended_articles)
+    # 3. For each user, filtering and sending email
+    for user in users:
+        target_email = user['email']
+        target_interests = user['interests']
+
+        print(f"\n📧 {target_email} 사용자를 위한 분석 중... (관심사: {target_interests})")
+        
+        # 3.1. 사용자별 관심사로 AI 필터링
+        recommended = ai_filter_with_gemini(raw_data, target_interests)
+        
+        # 3,2. 해당 이메일로 발송
+        if recommended:
+            send_email(recommended, target_email)
+            print(f"✅ {target_email}에게 발송 완료!")
+        else:
+            print(f"⚠️ {target_email}에 대한 추천 글이 없습니다.")
+
+    print("\n✨ 모든 사용자에게 발송을 마쳤습니다!")
