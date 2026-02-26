@@ -126,11 +126,14 @@ def send_email(articles_json):
         print(f"❌ 발송 실패: {e}")
 
 if __name__ == "__main__":
-    # 1. 수집
-    raw_data = fetch_theqoo_100() 
+    # 1. 100개 수집
+    raw_data = fetch_theqoo_100()
     
-    # 2. AI 필터링 (이제 JSON 리스트를 반환함)
-    recommended_articles = ai_filter_with_gemini(raw_data, "요리, IT, 꿀팁, 유머")
+    # 2. 내 관심사 (마음껏 수정해 보세요!)
+    my_interests = "IT 기기, NCT, 미국, AI" 
     
-    # 3. 메일 발송
+    # 3. AI 필터링
+    recommended_articles = ai_filter_with_gemini(raw_data, my_interests)
+    
+    # 4. 메일 발송
     send_email(recommended_articles)
