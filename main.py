@@ -6,6 +6,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
+import json
 
 try:
     from dotenv import load_dotenv
@@ -42,69 +43,94 @@ def fetch_theqoo_100():
     return all_articles[:100]
 
 def ai_filter_with_gemini(articles, interests):
-    # AI가 링크를 매칭할 수 있도록 제목과 링크를 같이 텍스트로 만듭니다.
-    titles_with_links = ""
-    for i, a in enumerate(articles):
-        titles_with_links += f"{i+1}. 제목: {a['title']} / 링크: {a['link']}\n"
+    titles_text = "\n".join([f"{i+1}. {a['title']} (Link: {a['link']})" for i, a in enumerate(articles)])
     
+    # f-string 안에서 { } 문자 자체를 쓰려면 {{ }} 이렇게 두 번 써야 합니다!
     prompt = f"""
-    당신은 유능한 개인 비서입니다. 아래 목록에서 사용자의 관심사에 맞는 글을 최대 5개 골라주세요.
+    당신은 유능한 개인 비서입니다. 아래 글 목록에서 사용자의 관심사에 맞는 글 5개를 골라주세요.
     
     [사용자 관심사]: {interests}
     [글 목록]:
-    {titles_with_links}
+    {titles_text}
     
     [출력 규칙]:
-    1. 반드시 아래 형식을 엄격히 지켜서 출력하세요:
-       번호. [제목]
-       - 링크: (제공된 링크 주소 그대로)
-       - 요약: (해당 글의 핵심 내용을 1문장으로 추측)
-    2. 링크는 반드시 목록에 있는 것을 그대로 매칭해야 합니다.
-    3. 다른 설명 없이 결과만 출력하세요.
+    - 반드시 JSON 형식으로만 답변하세요. 다른 말은 절대 하지 마세요.
+    - 형식: [{{ "title": "제목", "link": "링크", "summary": "요약" }}]
     """
 
     try:
-        print(f"\n🤖 Gemini AI가 링크 매칭 및 요약 중...")
+        print(f"🤖 AI가 데이터 분석 중...")
         response = model.generate_content(prompt)
-        return response.text.strip()
+        
+        # AI가 가끔 마크다운 태그(```json)를 붙여서 대답하므로 이를 제거합니다.
+        raw_text = response.text.strip()
+        json_str = raw_text.replace('```json', '').replace('```', '').strip()
+        
+        return json.loads(json_str)
     except Exception as e:
-        print(f"AI 분석 중 에러 발생: {e}")
-        return "결과를 가져오지 못했습니다."
+        print(f"AI 분석 에러: {e}")
+        # 에러 발생 시 빈 리스트를 반환하여 프로그램이 멈추지 않게 합니다.
+        return []
     
-def send_email(content):
-    # 설정 정보
-    SMTP_SERVER = "smtp.gmail.com"
-    SMTP_PORT = 587
+def send_email(articles_json):
+    if not articles_json:
+        print("발송할 내용이 없습니다.")
+        return
+
+    # HTML 본문 만들기
+    html_content = f"""
+    <html>
+    <body style="font-family: 'Malgun Gothic', sans-serif; line-height: 1.6; color: #333;">
+        <h2 style="color: #1a73e8; border-bottom: 2px solid #1a73e8; padding-bottom: 10px;">
+            🚀 AI 선정 오늘의 스퀘어 베스트 5
+        </h2>
+        <div style="margin-top: 20px;">
+    """
+    
+    for item in articles_json:
+        html_content += f"""
+        <div style="margin-bottom: 25px; padding: 15px; border-radius: 8px; background-color: #f8f9fa;">
+            <a href="{item['link']}" style="font-size: 18px; color: #1a0dab; text-decoration: none; font-weight: bold;">
+                {item['title']}
+            </a>
+            <p style="margin: 10px 0 0 0; color: #555;">
+                <strong>💡 요약:</strong> {item['summary']}
+            </p>
+        </div>
+        """
+    
+    html_content += """
+        </div>
+        <p style="font-size: 12px; color: #888; margin-top: 30px;">
+            본 메일은 GitHub Actions를 통해 자동으로 생성되었습니다.
+        </p>
+    </body>
+    </html>
+    """
 
     msg = MIMEMultipart()
+    msg['Subject'] = "[오늘의 스퀘어] AI가 요약한 인기 글 도착! 📬"
     msg['From'] = SENDER_EMAIL
-    msg['To'] = RECEIVER_EMAIL
-    msg['Subject'] = "[오늘의 스퀘어 추천] AI 요약 도착! 📬"
+    msg['To'] = SENDER_EMAIL # 나에게 보내기
 
-    msg.attach(MIMEText(content, 'plain'))
+    # 중요: MIMEText의 두 번째 인자를 'html'로 설정
+    msg.attach(MIMEText(html_content, 'html'))
 
     try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls() # 보안 연결
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
             server.login(SENDER_EMAIL, SENDER_PASSWORD)
             server.send_message(msg)
-        print("✅ 이메일 발송 성공!")
+        print("✅ HTML 메일 발송 성공!")
     except Exception as e:
-        print(f"❌ 이메일 발송 실패: {e}")
+        print(f"❌ 발송 실패: {e}")
 
 if __name__ == "__main__":
-    # 1. 100개 수집
-    raw_data = fetch_theqoo_100()
+    # 1. 수집
+    raw_data = fetch_theqoo_100() 
     
-    # 2. 내 관심사 (마음껏 수정해 보세요!)
-    my_interests = "IT 기기, NCT, 미국, AI" 
+    # 2. AI 필터링 (이제 JSON 리스트를 반환함)
+    recommended_articles = ai_filter_with_gemini(raw_data, "요리, IT, 꿀팁, 유머")
     
-    # 3. AI 필터링
-    final_summary = ai_filter_with_gemini(raw_data, my_interests)
-    
-    print("\n✨ AI 비서가 고른 오늘의 추천 글 및 요약 ✨")
-    print("-" * 50)
-    print(final_summary)  # 반복문 없이 그냥 출력!
-    print("-" * 50)
-
-    send_email(final_summary)
+    # 3. 메일 발송
+    send_email(recommended_articles)
